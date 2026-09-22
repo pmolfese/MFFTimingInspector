@@ -1,0 +1,48 @@
+MFF Timing Inspector License and Public Work Notice
+
+This notice is not a substitute for legal review. Questions about redistributing
+MFF Timing Inspector, or about combining it with licensed third-party code,
+should go to the appropriate NIH technology transfer or software release office.
+
+
+1. This software's own code
+
+MFF Timing Inspector was developed by P. Molfese, Center for Multimodal
+Neuroimaging (CMN), National Institute of Mental Health (NIMH), National
+Institutes of Health (NIH) (https://cmn.nimh.nih.gov), as part of official
+duties for the United States Government.
+
+This software is a "work of the United States Government" under 17 U.S.C. § 105
+and is not subject to copyright protection within the United States.
+International copyright protections may apply.
+
+To the extent that any rights can be asserted by the United States Government,
+the Government makes its own contributions to MFF Timing Inspector available
+for public use, copying, modification, and redistribution without fee or
+copyright restriction.
+
+Nothing elsewhere in this notice narrows that grant. The Government-authored
+files remain a public work in their own right: they may be extracted from
+MFF Timing Inspector and reused under no conditions at all, whatever license
+governs the assembled application.
+
+
+2. Third-party components
+
+As of this writing, MFF Timing Inspector does not incorporate, vendor, or
+redistribute any third-party source code, libraries, models, or data. It is
+built entirely on Apple's own system frameworks (SwiftUI, Swift Charts,
+Foundation), which ship with Xcode and macOS and are licensed separately by
+Apple, not by this repository.
+
+If third-party code is ever added, that code's own license governs it, and the
+United States Government cannot waive, grant, or modify rights held by third
+parties.
+
+
+3. Data files
+
+Files under `example_files/` and `MFFTimingToolTests/Fixtures/` are sample or
+synthetic timing data used to develop and test this software, not part of the
+software itself. Some of that data was derived from a real recording session;
+see the note in README.md before publishing this repository anywhere public.

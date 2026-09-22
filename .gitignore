@@ -1,0 +1,37 @@
+# macOS metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+# Xcode per-user state
+**/xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+
+# Xcode build products
+DerivedData/
+build/
+*.moved-aside
+
+# Swift Package Manager local build state (not used by this project directly,
+# but harmless to ignore if a stray `swift build` is ever run here)
+.build/
+.swiftpm/
+
+# Local editor state
+.vscode/
+*.swp
+*~
+
+# Local example/fixture data, not part of the source. Some of it was copied
+# from a real recording session (see README.md) and shouldn't end up in git
+# history; the rest is just regenerable sample data. Tests that depend on
+# files here skip themselves via Fixtures.exists(_:) rather than failing when
+# this directory isn't present -- see Fixtures.swift.
+MFFTimingToolTests/Fixtures/
+example_files/
