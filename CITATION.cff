@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use MFF Timing Inspector, please cite it using the metadata below."
+title: "MFF Timing Inspector"
+abstract: "A native macOS app for checking EGI/Philips Neuroscience MFF recording timing against the diagnostics egi-pynetstation writes while sending ECI events: event-vs-DIN offset analysis, NTP/drift-model stability, and dropped-display-frame correlation."
+type: software
+authors:
+  - family-names: Molfese
+    given-names: Peter J.
+    orcid: https://orcid.org/0000-0002-3045-9408
+    affiliation: Center for Multimodal Neuroimaging, National Institute of Mental Health, National Institutes of Health
+version: 0.1.0
+license: CC0-1.0
+repository-code: https://github.com/pmolfese/MFFTimingInspector
+keywords:
+  - EEG
+  - EGI Net Station
+  - MFF
+  - egi-pynetstation
+  - event timing
+  - clock drift
+  - PsychoPy
+  - event-related potentials
