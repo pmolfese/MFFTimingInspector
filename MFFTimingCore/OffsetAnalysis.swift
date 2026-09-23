@@ -146,7 +146,6 @@ enum OffsetAnalysis {
         // fine for the CLI's single-pair use but is O(n*m) at UI scale
         // (thousands of events on each side), which measurably froze the app.
         var pairs: [OffsetPair] = []
-        var deltasMs: [Double] = []
         for (offset, event) in primaryEvents.enumerated() {
             let matched = SortedMatch.find(
                 in: referenceEvents,
@@ -156,9 +155,15 @@ enum OffsetAnalysis {
             )
             let pair = OffsetPair(id: offset, primaryEvent: event, referenceEvent: matched)
             pairs.append(pair)
-            if let delta = pair.deltaMilliseconds { deltasMs.append(delta) }
         }
 
+        return summarize(pairs)
+    }
+
+    /// Builds the derived statistics for an already-paired series. Project
+    /// files use this to restore a plot from only (time, delta) numbers.
+    static func summarize(_ pairs: [OffsetPair]) -> OffsetSummary {
+        let deltasMs = pairs.compactMap(\.deltaMilliseconds)
         let rows = frequencyRows(deltasMs)
         return OffsetSummary(
             pairs: pairs,

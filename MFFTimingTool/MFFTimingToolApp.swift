@@ -17,20 +17,47 @@ import SwiftUI
 @main
 struct MFFTimingToolApp: App {
     @StateObject private var appState = AppState()
+    @StateObject private var updateChecker = UpdateChecker()
 
     var body: some Scene {
         WindowGroup("MFF Timing Inspector") {
             ContentView()
                 .environmentObject(appState)
+                .environmentObject(updateChecker)
                 .frame(minWidth: 980, minHeight: 560)
         }
         .windowResizability(.contentSize)
         .commands {
             CommandGroup(after: .newItem) {
+                Button("Open…") {
+                    appState.isOpeningProject = true
+                }
+                .keyboardShortcut("o", modifiers: .command)
+
                 Button("Open MFF…") {
                     appState.isImportingMFF = true
                 }
-                .keyboardShortcut("o", modifiers: .command)
+                .keyboardShortcut("o", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button("Export Plot Data (Lite)…") {
+                    appState.prepareProjectExport()
+                }
+                .keyboardShortcut("s", modifiers: .command)
+
+                Divider()
+
+                Button("Export Support Bundle…") {
+                    appState.prepareSupportBundleExport()
+                }
+            }
+
+            CommandGroup(after: .appInfo) {
+                Button(updateChecker.isChecking ? "Checking for Updates…" : "Check for Updates…") {
+                    Task { await updateChecker.checkForUpdates() }
+                }
+                .disabled(updateChecker.isChecking)
             }
         }
 

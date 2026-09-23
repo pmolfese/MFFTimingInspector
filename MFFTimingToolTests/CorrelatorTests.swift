@@ -17,6 +17,35 @@ import Foundation
 @testable import MFFTimingTool
 
 struct CorrelatorTests {
+    private func event(_ index: Int, code: String, seconds: Double) -> MFFEvent {
+        MFFEvent(
+            index: index,
+            sourceFile: "Events.xml",
+            beginDate: Date(timeIntervalSinceReferenceDate: 800_000 + seconds),
+            rawBeginTime: "",
+            relativeBeginTimeMicroseconds: nil,
+            durationMicroseconds: 1_000,
+            code: code,
+            label: code,
+            eventDescription: nil,
+            sourceDevice: nil,
+            keys: [:]
+        )
+    }
+
+    private func trial(_ index: Int, code: String, packageTime: Double) -> TrialRecord {
+        TrialRecord(
+            index: index,
+            sourceFile: "timing.csv",
+            rawFields: [
+                "record_type": "egi_event",
+                "event_code": code,
+                "package_time": String(packageTime),
+                "trial_index": String(index),
+            ]
+        )
+    }
+
     func stagedMFF() throws -> URL {
         let eventsFile = Fixtures.url("Events_stm.xml")
         let mffDirectory = FileManager.default.temporaryDirectory
@@ -61,6 +90,56 @@ struct CorrelatorTests {
         // last real trial, so nothing in the CSV should match it.
         #expect(matches[3].trial == nil)
         #expect(matches[3].deltaSeconds == nil)
+    }
+
+    @Test func calibratesFromSharedEventsWhenMFFHasNoRelativeTimes() throws {
+        // The MFF clock deliberately has an unrelated/stale absolute date.
+        // Only elapsed timing and shared event codes agree with package_time.
+        let events = [
+            event(1, code: "EXPT", seconds: 0),
+            event(2, code: "S011", seconds: 19.819),
+            event(3, code: "S011", seconds: 20.319),
+            event(4, code: "DIN2", seconds: 19.8195),
+        ]
+        let trials = [
+            trial(1, code: "EXPT", packageTime: 2.0052),
+            trial(2, code: "S011", packageTime: 21.82432),
+            trial(3, code: "S011", packageTime: 22.32428),
+            // A sent event missing from the MFF must not disrupt calibration.
+            trial(4, code: "MN51", packageTime: 100),
+        ]
+
+        let matches = Correlator.matchMFFEvents(events, toTrials: trials)
+
+        #expect(matches[0].trial?.eventCode == "EXPT")
+        #expect(matches[1].trial?.trialIndex == 2)
+        #expect(matches[2].trial?.trialIndex == 3)
+        for match in matches.prefix(3) {
+            #expect(abs(match.deltaSeconds ?? .infinity) < 0.001)
+        }
+        // DIN is an input track, not an outbound egi_event row.
+        #expect(matches[3].trial == nil)
+    }
+
+    @Test @MainActor func alignsLocalFrameClockToStaleMFFCalendar() throws {
+        let mffEvent = event(1, code: "S011", seconds: 20)
+        let localEpoch = mffEvent.beginDate.timeIntervalSince1970 + 8 * 24 * 60 * 60
+        let row = TrialRecord(
+            index: 1,
+            sourceFile: "timing.csv",
+            rawFields: [
+                "record_type": "egi_event",
+                "event_code": "S011",
+                "package_time": "20",
+                "local_time": String(localEpoch)
+            ]
+        )
+        let shift = try #require(AppState.mffClockShiftFromLocalTime(in: [
+            MatchedEvent(mffEvent: mffEvent, trial: row, deltaSeconds: 0)
+        ]))
+
+        #expect(abs(shift + 8 * 24 * 60 * 60) < 0.001)
+        #expect(abs(Date(timeIntervalSince1970: localEpoch).addingTimeInterval(shift).timeIntervalSince(mffEvent.beginDate)) < 0.001)
     }
 
     @Test(.enabled(if: Fixtures.exists("egi_timing.csv") && Fixtures.exists("netstation_diagnostics.jsonl")))

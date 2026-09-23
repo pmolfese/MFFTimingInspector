@@ -21,10 +21,18 @@
 
 import Foundation
 
-enum DriftStage: String, Sendable {
+enum DriftStage: String, Sendable, Hashable {
     case warmup
     case stable
     case unknown
+
+    var label: String {
+        switch self {
+        case .warmup: return "Warmup model"
+        case .stable: return "Main model (stable)"
+        case .unknown: return "Unknown stage"
+        }
+    }
 }
 
 /// One drift-model fit or status heartbeat with a numeric slope, i.e. every
@@ -66,6 +74,7 @@ struct DriftTransition: Identifiable, Sendable {
     let id: Int
     let time: Date
     let kind: DriftTransitionKind
+    let stage: DriftStage?
     let record: DiagnosticRecord
 }
 
@@ -93,12 +102,34 @@ enum DriftAnalysis {
         var slopePoints: [DriftSlopePoint] = []
         var transitions: [DriftTransition] = []
         var sessions: [DriftSession] = []
+        var sessionUsesWarmup: Bool?
 
         for record in sorted {
             guard let date = record.date else { continue }
 
+            if record.recordType == DriftTransitionKind.sessionStart.rawValue {
+                sessionUsesWarmup = record["drift_warmup"]?.boolValue
+            }
+
+            let defaultEngagedStage: DriftStage = sessionUsesWarmup == false ? .stable : .warmup
+            let recordStage = stage(of: record, defaultEngagedStage: defaultEngagedStage)
+
             if let kind = DriftTransitionKind(rawValue: record.recordType) {
-                transitions.append(DriftTransition(id: transitions.count, time: date, kind: kind, record: record))
+                let transitionStage: DriftStage?
+                switch kind {
+                case .engaged: transitionStage = recordStage
+                case .promoted: transitionStage = .stable
+                default: transitionStage = nil
+                }
+                transitions.append(
+                    DriftTransition(
+                        id: transitions.count,
+                        time: date,
+                        kind: kind,
+                        stage: transitionStage,
+                        record: record
+                    )
+                )
             }
 
             switch record.recordType {
@@ -113,7 +144,7 @@ enum DriftAnalysis {
                             time: date,
                             elapsedSeconds: record["elapsed"]?.doubleValue,
                             slopeMsPerHour: slope,
-                            stage: stage(of: record),
+                            stage: recordStage,
                             outstandingErrorMs: record["outstanding_level_error_ms"]?.doubleValue
                         )
                     )
@@ -131,7 +162,7 @@ enum DriftAnalysis {
         return DriftTimeline(slopePoints: slopePoints, transitions: transitions, sessions: sessions)
     }
 
-    private static func stage(of record: DiagnosticRecord) -> DriftStage {
+    private static func stage(of record: DiagnosticRecord, defaultEngagedStage: DriftStage) -> DriftStage {
         if let raw = record["model_stage"]?.stringValue {
             return DriftStage(rawValue: raw) ?? .unknown
         }
@@ -143,7 +174,7 @@ enum DriftAnalysis {
         // (NetStation.py: the first fit that engages the model starts the
         // warmup window, and only a later fit can promote it to stable).
         if record.recordType == DriftTransitionKind.engaged.rawValue {
-            return .warmup
+            return defaultEngagedStage
         }
         return .unknown
     }

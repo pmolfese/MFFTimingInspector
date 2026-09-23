@@ -33,7 +33,7 @@ struct DriftView: View {
     private var frameDrops: [FrameDropEvent] { appState.frameDropEvents }
 
     var body: some View {
-        if appState.diagnostics.isEmpty {
+        if appState.diagnostics.isEmpty && timeline.slopePoints.isEmpty {
             ContentUnavailableView(
                 "No diagnostics loaded",
                 systemImage: "waveform.path.ecg",
@@ -67,6 +67,8 @@ struct DriftView: View {
         let undersampled = count(.undersampled)
         let failures = count(.eventSendFailure)
         let neverEngaged = timeline.sessions.filter { $0.engagedTime == nil }.count
+        let warmupFits = timeline.slopePoints.filter { $0.stage == .warmup }.count
+        let mainFits = timeline.slopePoints.filter { $0.stage == .stable }.count
 
         return HStack(spacing: 18) {
             statTile("sessions", "\(timeline.sessions.count)")
@@ -74,6 +76,8 @@ struct DriftView: View {
             statTile("recoveries", "\(recoveries)")
             statTile("NTP undersampled", "\(undersampled)", isWarning: undersampled > 0)
             statTile("send failures", "\(failures)", isWarning: failures > 0)
+            statTile("warmup fits", "\(warmupFits)")
+            statTile("main-model fits", "\(mainFits)")
             if neverEngaged > 0 {
                 statTile("never engaged", "\(neverEngaged)", isWarning: true)
             }
@@ -133,14 +137,14 @@ struct DriftView: View {
                         x: .value("Time", point.time),
                         y: .value("Slope (ms/hour)", point.slopeMsPerHour)
                     )
-                    .foregroundStyle(by: .value("Stage", point.stage.rawValue))
+                    .foregroundStyle(by: .value("Stage", point.stage.label))
                     .symbolSize(22)
                 }
             }
             .chartForegroundStyleScale([
-                DriftStage.warmup.rawValue: Color.orange,
-                DriftStage.stable.rawValue: Color.accentColor,
-                DriftStage.unknown.rawValue: Color.gray,
+                DriftStage.warmup.label: Color.orange,
+                DriftStage.stable.label: Color.accentColor,
+                DriftStage.unknown.label: Color.gray,
             ])
             .chartYAxisLabel("ms/hour")
             .frame(height: 220)
@@ -161,7 +165,7 @@ struct DriftView: View {
         let present = Set(timeline.transitions.map(\.kind))
         return HStack(spacing: 14) {
             ForEach(DriftTransitionKind.allCases.filter { present.contains($0) }, id: \.self) { kind in
-                legendEntry(color: color(for: kind), label: kind.label)
+                legendEntry(color: color(for: kind), label: legendLabel(for: kind))
             }
             if !frameDrops.isEmpty {
                 legendEntry(color: frameDropColor, label: "Dropped frame (\(frameDrops.count))")
@@ -246,7 +250,7 @@ struct DriftView: View {
                 TableColumn("Event") { transition in
                     HStack(spacing: 5) {
                         Circle().fill(color(for: transition.kind)).frame(width: 6, height: 6)
-                        Text(transition.kind.label)
+                        Text(label(for: transition))
                     }
                 }
                 .width(150)
@@ -276,6 +280,7 @@ struct DriftView: View {
             return "\(samples) samples over \(span)"
         case .stalled:
             let rejections: String? = record["consecutive_rejections"]?.displayString
+                ?? record["drift_consecutive_rejections"]?.displayString
             return rejections.map { "\($0) consecutive rejections" } ?? ""
         case .recovered:
             let duration = record["stall_duration"]?.doubleValue.map { String(format: "%.0fs stalled", $0) } ?? ""
@@ -289,5 +294,25 @@ struct DriftView: View {
         case .eventSendFailure:
             return record["error"]?.stringValue ?? ""
         }
+    }
+
+    private func label(for transition: DriftTransition) -> String {
+        switch (transition.kind, transition.stage) {
+        case (.engaged, .warmup): return "Warmup model engaged"
+        case (.engaged, .stable): return "Main model engaged"
+        case (.promoted, _): return "Promoted to main model"
+        default: return transition.kind.label
+        }
+    }
+
+    private func legendLabel(for kind: DriftTransitionKind) -> String {
+        let matching = timeline.transitions.filter { $0.kind == kind }
+        if kind == .engaged {
+            let stages = Set(matching.compactMap(\.stage))
+            if stages == [.warmup] { return "Warmup model engaged" }
+            if stages == [.stable] { return "Main model engaged" }
+        }
+        if kind == .promoted { return "Promoted to main model" }
+        return kind.label
     }
 }

@@ -52,7 +52,7 @@ struct EventTableView: View {
                     .width(60)
 
                     TableColumn("Δ send→MFF") { match in
-                        deltaText(match.deltaSeconds)
+                        deltaText(match)
                     }
                     .width(100)
 
@@ -122,10 +122,13 @@ struct EventTableView: View {
     }
 
     @ViewBuilder
-    private func deltaText(_ delta: Double?) -> some View {
-        if let delta {
+    private func deltaText(_ match: MatchedEvent) -> some View {
+        if let delta = match.deltaSeconds {
             Text(Formatting.milliseconds(fromSeconds: delta))
                 .foregroundStyle(abs(delta) > 0.05 ? Color.orange : .primary)
+        } else if MFFTrackClassifier.isDINLike(sourceFile: match.mffEvent.sourceFile) {
+            Text("input event")
+                .foregroundStyle(.secondary)
         } else {
             Text("no match")
                 .foregroundStyle(.red)

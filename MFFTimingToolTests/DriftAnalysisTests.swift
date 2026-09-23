@@ -34,7 +34,7 @@ struct DriftAnalysisTests {
         }
     }
 
-    @Test(.enabled(if: Fixtures.exists("netstation_diagnostics.jsonl"))) func firstFitIsAlwaysWarmupStage() throws {
+    @Test(.enabled(if: Fixtures.exists("netstation_diagnostics.jsonl"))) func firstFitHonorsSessionWarmupSetting() throws {
         let diagnostics = try loadedDiagnostics()
         let timeline = DriftAnalysis.timeline(from: diagnostics)
 
@@ -42,7 +42,9 @@ struct DriftAnalysisTests {
             diagnostics.first { $0.date == point.time }?.recordType == "drift_model_engaged"
         }
         #expect(!firstFits.isEmpty)
-        #expect(firstFits.allSatisfy { $0.stage == .warmup })
+        let sessions = diagnostics.filter { $0.recordType == "session_start" }
+        let expectsWarmup = sessions.allSatisfy { $0["drift_warmup"]?.boolValue != false }
+        #expect(firstFits.allSatisfy { $0.stage == (expectsWarmup ? .warmup : .stable) })
     }
 
     @Test(.enabled(if: Fixtures.exists("netstation_diagnostics.jsonl"))) func promotedRecordsAreStableStage() throws {
@@ -94,5 +96,31 @@ struct DriftAnalysisTests {
         #expect(timeline.slopePoints.isEmpty)
         #expect(timeline.transitions.isEmpty)
         #expect(timeline.sessions.isEmpty)
+    }
+
+    @Test func engagedTransitionDistinguishesWarmupFromMainModel() throws {
+        func record(_ index: Int, type: String, time: Double, fields: [String: JSONValue]) -> DiagnosticRecord {
+            DiagnosticRecord(
+                index: index,
+                sourceFile: "diagnostics.jsonl",
+                recordType: type,
+                time: time,
+                fields: fields.merging(["record": .string(type), "time": .number(time)]) { value, _ in value }
+            )
+        }
+
+        let noWarmup = DriftAnalysis.timeline(from: [
+            record(1, type: "session_start", time: 1, fields: ["drift_warmup": .bool(false)]),
+            record(2, type: "drift_model_engaged", time: 2, fields: ["active_slope_ms_per_hour": .number(1)])
+        ])
+        let withWarmup = DriftAnalysis.timeline(from: [
+            record(1, type: "session_start", time: 1, fields: ["drift_warmup": .bool(true)]),
+            record(2, type: "drift_model_engaged", time: 2, fields: ["active_slope_ms_per_hour": .number(1)])
+        ])
+
+        #expect(try #require(noWarmup.transitions.first { $0.kind == .engaged }).stage == .stable)
+        #expect(try #require(withWarmup.transitions.first { $0.kind == .engaged }).stage == .warmup)
+        #expect(noWarmup.slopePoints.first?.stage == .stable)
+        #expect(withWarmup.slopePoints.first?.stage == .warmup)
     }
 }

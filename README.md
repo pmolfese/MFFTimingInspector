@@ -14,6 +14,22 @@ It reads, side by side:
 - a per-trial timing CSV (planned vs. actual send times, per-trial metadata)
 - a per-frame interval CSV, if the experiment script logged one
 
+Use **File → Export Plot Data (Lite)…** to write the current offset, drift,
+dropped-frame, and downsampled frame-interval plots to a compact `.json`
+project. The project contains only numeric plot series (not the source MFF,
+CSV rows, or diagnostic records), and **File → Open** reconstructs those plots
+later.
+
+Use **File → Export Support Bundle…** when reporting a problem. Its single
+compact JSON file includes the complete saved project plus app/macOS versions,
+source names and counts, analysis settings, and the minimal event/trial timing
+values needed to reproduce matching. It never includes EEG sample data, full
+CSV rows, or arbitrary trial metadata. A support bundle can also be opened by
+the app, so the user does not need to create a separate project file.
+
+Use **MFF Timing Inspector → Check for Updates…** to compare the installed
+version with the latest published GitHub release.
+
 ## Requirements
 
 - macOS 14+

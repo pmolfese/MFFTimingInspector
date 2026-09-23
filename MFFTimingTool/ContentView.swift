@@ -19,17 +19,11 @@ private extension UTType {
     static let jsonLines = UTType(filenameExtension: "jsonl", conformingTo: .json) ?? .json
 }
 
-private enum ContentTab: String, CaseIterable, Identifiable {
-    case events = "Events"
-    case offsetAnalysis = "Offset analysis"
-    case drift = "Drift"
-    var id: String { rawValue }
-}
-
 struct ContentView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var updateChecker: UpdateChecker
+    @Environment(\.openURL) private var openURL
     @State private var isDropTargeted = false
-    @State private var contentTab: ContentTab = .events
 
     var body: some View {
         // A single sidebar + content NavigationSplitView, always -- the tab
@@ -57,6 +51,25 @@ struct ContentView: View {
         .fileImporter(isPresented: $appState.isImportingFrameIntervals, allowedContentTypes: [.commaSeparatedText]) { result in
             handle(result) { appState.importFrameIntervals(url: $0) }
         }
+        .fileImporter(isPresented: $appState.isOpeningProject, allowedContentTypes: [.json]) { result in
+            handle(result) { appState.openProject(url: $0) }
+        }
+        .fileExporter(
+            isPresented: $appState.isExportingProject,
+            document: appState.projectExportDocument,
+            contentType: .json,
+            defaultFilename: appState.suggestedProjectFilename
+        ) { result in
+            appState.finishExport(result)
+        }
+        .fileExporter(
+            isPresented: $appState.isExportingSupportBundle,
+            document: appState.supportBundleExportDocument,
+            contentType: .json,
+            defaultFilename: appState.suggestedSupportBundleFilename
+        ) { result in
+            appState.finishSupportBundleExport(result)
+        }
         .overlay {
             if isDropTargeted {
                 RoundedRectangle(cornerRadius: 12)
@@ -69,6 +82,41 @@ struct ContentView: View {
             loadDroppedURLs(from: providers)
             return true
         }
+        .alert(item: $updateChecker.result) { result in
+            updateAlert(for: result.outcome)
+        }
+    }
+
+    private func updateAlert(for outcome: UpdateCheckResult.Outcome) -> Alert {
+        switch outcome {
+        case .updateAvailable(let version, let releaseName, let url):
+            let title = releaseName.flatMap { $0.isEmpty ? nil : $0 } ?? version
+            return Alert(
+                title: Text("Update Available"),
+                message: Text("\(title) is available on GitHub."),
+                primaryButton: .default(Text("View Release")) { openURL(url) },
+                secondaryButton: .cancel(Text("Later"))
+            )
+        case .upToDate(let currentVersion):
+            return Alert(
+                title: Text("MFF Timing Inspector Is Up to Date"),
+                message: Text("You’re running version \(currentVersion)."),
+                dismissButton: .default(Text("OK"))
+            )
+        case .noPublishedRelease:
+            return Alert(
+                title: Text("No Published Releases"),
+                message: Text("This GitHub repository does not have a published release yet."),
+                primaryButton: .default(Text("View Releases")) { openURL(UpdateChecker.releasesPage) },
+                secondaryButton: .cancel(Text("OK"))
+            )
+        case .failed(let message):
+            return Alert(
+                title: Text("Couldn’t Check for Updates"),
+                message: Text(message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
     }
 
     private var sidebar: some View {
@@ -78,7 +126,7 @@ struct ContentView: View {
 
     private var contentColumn: some View {
         VStack(spacing: 0) {
-            Picker("View", selection: $contentTab) {
+            Picker("View", selection: $appState.contentTab) {
                 ForEach(ContentTab.allCases) { tab in
                     Text(tab.rawValue).tag(tab)
                 }
@@ -89,7 +137,7 @@ struct ContentView: View {
 
             Divider()
 
-            switch contentTab {
+            switch appState.contentTab {
             case .events:
                 HSplitView {
                     EventTableView()

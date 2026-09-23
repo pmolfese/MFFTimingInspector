@@ -23,9 +23,9 @@ struct SourceListView: View {
             Section("Sources") {
                 sourceRow(
                     icon: "doc.text",
-                    title: appState.mffURL?.lastPathComponent ?? "Open MFF…",
+                    title: appState.mffSourceName ?? "Open MFF…",
                     subtitle: appState.mffEvents.isEmpty ? nil : "\(appState.mffEvents.count) events",
-                    isLoaded: appState.mffURL != nil,
+                    isLoaded: !appState.mffEvents.isEmpty,
                     onImport: { appState.isImportingMFF = true }
                 )
 

@@ -44,6 +44,7 @@ struct OffsetAnalysisView: View {
     }
 
     private var summary: OffsetSummary? {
+        if let restored = appState.restoredOffsetSummary { return restored }
         guard !appState.offsetPrimarySelection.isEmpty, !appState.offsetReferenceSelection.isEmpty else { return nil }
         return OffsetAnalysis.computeOffsets(
             events: appState.mffEvents,
@@ -54,7 +55,7 @@ struct OffsetAnalysisView: View {
     }
 
     var body: some View {
-        if appState.mffEvents.isEmpty {
+        if appState.mffEvents.isEmpty && summary == nil {
             ContentUnavailableView(
                 "No MFF loaded",
                 systemImage: "arrow.left.arrow.right",
@@ -69,8 +70,10 @@ struct OffsetAnalysisView: View {
             GeometryReader { geometry in
                 HStack(alignment: .top, spacing: 0) {
                     VStack(spacing: 0) {
-                        controls
-                        Divider()
+                        if !appState.mffEvents.isEmpty {
+                            controls
+                            Divider()
+                        }
                         if let summary {
                             offsetOverTimeChart(summary)
                             Divider()
@@ -174,8 +177,8 @@ struct OffsetAnalysisView: View {
     /// results table below.
     @ViewBuilder
     private func offsetOverTimeChart(_ summary: OffsetSummary) -> some View {
-        let frameDrops = appState.frameDropEvents
-        let hasFrameIntervals = !appState.frameIntervalSeries.isEmpty
+        let frameDrops = appState.frameDropEventsOnMFFClock
+        let hasFrameIntervals = !appState.frameIntervalSeriesOnMFFClock.isEmpty
         let showIntervals = hasFrameIntervals && appState.offsetShowFrameIntervals
 
         VStack(alignment: .leading, spacing: 6) {
@@ -229,7 +232,8 @@ struct OffsetAnalysisView: View {
     }
 
     private func offsetChart(_ summary: OffsetSummary, frameDrops: [FrameDropEvent]) -> some View {
-        Chart {
+        let timeDomain = offsetTimeDomain(summary)
+        return Chart {
             ForEach(frameDrops) { drop in
                 RuleMark(x: .value("Time", drop.time))
                     .foregroundStyle(Color.indigo.opacity(0.5))
@@ -247,6 +251,7 @@ struct OffsetAnalysisView: View {
                 }
             }
         }
+        .chartXScale(domain: timeDomain)
         .chartYAxisLabel("ms")
         .chartXAxis {
             AxisMarks { value in
@@ -289,7 +294,7 @@ struct OffsetAnalysisView: View {
     /// width would squeeze that whole burst into a few pixels at the left
     /// edge -- which is what actually happened before this was reverted.
     private func frameIntervalChart() -> some View {
-        let series = appState.frameIntervalSeries
+        let series = appState.frameIntervalSeriesOnMFFClock
         let yDomain = clippedIntervalDomain(series)
         let timeSpan = series.first.flatMap { first in series.last.map { last in last.time.timeIntervalSince(first.time) } }
         return VStack(alignment: .leading, spacing: 4) {
@@ -316,6 +321,22 @@ struct OffsetAnalysisView: View {
             }
             .frame(height: 90)
         }
+    }
+
+    /// Auxiliary marks must never determine this domain. In particular, a
+    /// stale MFF calendar and experiment-local frame times can be days apart;
+    /// allowing both to auto-scale collapses an hours-long offset series into
+    /// a single pixel. A small pad keeps endpoint points fully visible.
+    private func offsetTimeDomain(_ summary: OffsetSummary) -> ClosedRange<Date> {
+        let dates = summary.pairs.compactMap { pair in
+            pair.deltaMilliseconds == nil ? nil : pair.primaryEvent.beginDate
+        }
+        guard let first = dates.min(), let last = dates.max() else {
+            let now = Date()
+            return now.addingTimeInterval(-1)...now.addingTimeInterval(1)
+        }
+        let pad = max(1, last.timeIntervalSince(first) * 0.01)
+        return first.addingTimeInterval(-pad)...last.addingTimeInterval(pad)
     }
 
     /// Flags when the frame-interval log covers noticeably less time than
